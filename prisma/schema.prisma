@@ -1,0 +1,400 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  SHOP_ADMIN
+  CLIENT
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAYMENT_CONFIRMED
+  PROCESSING
+  READY_FOR_PICKUP
+  SHIPPED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum ProductCategory {
+  RINGS
+  NECKLACES
+  BRACELETS
+  EARRINGS
+  BARS
+  COINS
+}
+
+enum GoldKarat {
+  K24
+  K22
+  K21
+  K18
+  K14
+}
+
+enum ShopStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+model User {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  email             String    @unique
+  password          String
+  name              String?
+  phone             String?
+  role              UserRole  @default(CLIENT)
+  languagePreference String   @default("en")
+  currencyPreference String   @default("USD")
+  emailVerified     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  shop              Shop?     @relation("ShopAdmin")
+  orders            Order[]
+  addresses         Address[]
+  recipients        Recipient[]
+  cartItems         CartItem[]
+  wishlistItems     WishlistItem[]
+  passwordResetTokens PasswordResetToken[]
+  chatSessions      ChatSession[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model Shop {
+  id              String      @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  adminId         String      @unique @db.ObjectId
+  logo            String?
+  banner          String?
+  description     String?
+  address         String?
+  city            String?
+  country         String?
+  phone           String?
+  email           String?
+  businessHours   Json?
+  commissionRate  Float       @default(0.10) // 10% default
+  status          ShopStatus  @default(ACTIVE)
+  bankDetails     Json?
+  shippingMethods String[]    @default(["PICKUP", "DELIVERY"]) // Available shipping methods: PICKUP, DELIVERY
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  admin           User        @relation("ShopAdmin", fields: [adminId], references: [id])
+  products        Product[]
+  orders          Order[]
+
+  @@index([status])
+  @@map("shops")
+}
+
+model Product {
+  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  shopId          String          @db.ObjectId
+  name            String
+  nameTranslations Json?          // { en: "Gold Ring", ar: "خاتم ذهبي" }
+  category        ProductCategory
+  karat           GoldKarat
+  weight          Float           // in grams
+  makingCharges   Float           // fixed amount per gram in USD (not percentage)
+  basePricePerGram Float?         // stored for reference
+  finalPrice      Float           // calculated price
+  images          String[]        // array of image URLs
+  description     String?
+  descriptionTranslations Json?   // { en: "...", ar: "..." }
+  stockQuantity   Int             @default(0)
+  sku             String          @unique
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relations
+  shop            Shop            @relation(fields: [shopId], references: [id])
+  orderItems      OrderItem[]
+  cartItems       CartItem[]
+  wishlistItems   WishlistItem[]
+
+  @@index([shopId])
+  @@index([category])
+  @@index([karat])
+  @@index([isActive])
+  @@map("products")
+}
+
+model Order {
+  id              String      @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String      @db.ObjectId
+  shopId          String      @db.ObjectId
+  orderNumber     String      @unique
+  total           Float
+  currency        String      @default("USD")
+  exchangeRate    Float?      // exchange rate at time of purchase
+  status          OrderStatus @default(PENDING_PAYMENT)
+  paymentMethod   String?
+  paymentStatus   String?
+  shippingMethod  String?     // PICKUP or DELIVERY
+  shippingAddress Json?
+  billingAddress  Json?
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  user            User        @relation(fields: [userId], references: [id])
+  shop            Shop        @relation(fields: [shopId], references: [id])
+  items           OrderItem[]
+  transactions    Transaction[]
+
+  @@index([userId])
+  @@index([shopId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  orderId         String    @db.ObjectId
+  productId       String    @db.ObjectId
+  quantity        Int
+  priceAtPurchase Float    // price at time of purchase
+  currency        String
+  createdAt       DateTime  @default(now())
+
+  // Relations
+  order           Order     @relation(fields: [orderId], references: [id])
+  product         Product   @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("orderItems")
+}
+
+model GoldRate {
+  id              String      @id @default(auto()) @map("_id") @db.ObjectId
+  karat           GoldKarat
+  rate            Float       // price per gram
+  currency        String      @default("USD")
+  timestamp       DateTime    @default(now())
+
+  @@index([karat, currency])
+  @@index([timestamp])
+  @@map("goldRates")
+}
+
+model Currency {
+  id                  String    @id @default(auto()) @map("_id") @db.ObjectId
+  code                String    @unique // USD, KWD, AED
+  symbol              String
+  name                String
+  exchangeRateToBase  Float     // base currency is USD
+  isActive            Boolean   @default(true)
+  updatedAt           DateTime  @updatedAt
+
+  @@map("currencies")
+}
+
+model Translation {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  key             String
+  language        String    // en, ar
+  value           String
+  namespace       String?   @default("common")
+
+  @@unique([key, language, namespace])
+  @@index([language])
+  @@map("translations")
+}
+
+model Address {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String    @db.ObjectId
+  firstName       String
+  lastName        String
+  email           String?
+  phone           String?
+  street          String
+  city            String
+  state           String?
+  zipCode         String?
+  country         String
+  isDefault       Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  user            User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+model Recipient {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String    @db.ObjectId
+  firstName       String
+  lastName        String
+  email           String?
+  phone           String?
+  relationship    String?   // e.g., "Family", "Friend", "Colleague"
+  isDefault       Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  user            User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("recipients")
+}
+
+model CartItem {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String    @db.ObjectId
+  productId       String    @db.ObjectId
+  quantity        Int       @default(1)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  user            User      @relation(fields: [userId], references: [id])
+  product         Product   @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@map("cartItems")
+}
+
+model WishlistItem {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String    @db.ObjectId
+  productId       String    @db.ObjectId
+  createdAt       DateTime  @default(now())
+
+  // Relations
+  user            User      @relation(fields: [userId], references: [id])
+  product         Product   @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@map("wishlistItems")
+}
+
+model Transaction {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  orderId         String    @db.ObjectId
+  amount          Float
+  currency        String
+  paymentMethod   String
+  status          String    // pending, completed, failed, refunded
+  transactionId   String?   // external payment gateway ID
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  order           Order     @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@index([status])
+  @@index([transactionId])
+  @@map("transactions")
+}
+
+model PasswordResetToken {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String    @db.ObjectId
+  token           String    @unique
+  expiresAt       DateTime
+  used            Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+
+  // Relations
+  user            User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("passwordResetTokens")
+}
+
+enum ChatSessionStatus {
+  AI
+  HUMAN
+  CLOSED
+}
+
+enum ChatMessageRole {
+  USER
+  AI
+  AGENT
+}
+
+model ChatSession {
+  id            String            @id @default(auto()) @map("_id") @db.ObjectId
+  sessionToken  String            @unique
+  userId        String?           @db.ObjectId
+  agentId       String?           @db.ObjectId
+  status        ChatSessionStatus @default(AI)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  user          User?             @relation(fields: [userId], references: [id])
+  messages      ChatMessage[]
+
+  @@index([status])
+  @@index([userId])
+  @@map("chatSessions")
+}
+
+model ChatMessage {
+  id            String          @id @default(auto()) @map("_id") @db.ObjectId
+  sessionId     String          @db.ObjectId
+  role          ChatMessageRole
+  content       String
+  createdAt     DateTime        @default(now())
+
+  session       ChatSession     @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId])
+  @@map("chatMessages")
+}
+
+type PaymentMethodConfig {
+  provider          String   // e.g., "STRIPE", "COD", "ADYEN"
+  isEnabled         Boolean  @default(false)
+  displayName       String?
+  config            Json?    // API keys, etc.
+}
+
+model SystemConfig {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  key               String   @unique // e.g., "main_config"
+  singleShopMode    Boolean  @default(false)
+  defaultShopId     String?  @db.ObjectId // Required if singleShopMode is true
+
+  // Payment Methods Configuration
+  paymentMethods    PaymentMethodConfig[]
+
+  updatedAt         DateTime @updatedAt
+
+  @@map("systemConfig")
+}
