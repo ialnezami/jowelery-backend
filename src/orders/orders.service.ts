@@ -117,6 +117,43 @@ export class OrdersService {
     return updated;
   }
 
+  async refund(id: string, userId: string, userRole: string, reason?: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+
+    const refundableStatuses = ['PAYMENT_CONFIRMED', 'PROCESSING', 'READY_FOR_PICKUP', 'SHIPPED', 'DELIVERED', 'COMPLETED'];
+    if (!refundableStatuses.includes(order.status)) {
+      throw new BadRequestException(`Cannot refund an order with status ${order.status}`);
+    }
+
+    if (userRole === 'SHOP_ADMIN') {
+      const shop = await this.prisma.shop.findUnique({ where: { adminId: userId } });
+      if (!shop || order.shopId !== shop.id) throw new ForbiddenException();
+    }
+
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.order.update({
+        where: { id },
+        data: { status: 'REFUNDED', paymentStatus: 'refunded', notes: reason ? `Refund reason: ${reason}` : undefined },
+      }),
+      this.prisma.transaction.create({
+        data: {
+          orderId: id,
+          amount: order.total,
+          currency: order.currency,
+          paymentMethod: order.paymentMethod ?? 'card',
+          status: 'refunded',
+          metadata: reason ? { reason } : undefined,
+        },
+      }),
+    ]);
+
+    return updated;
+  }
+
   private async triggerStatusEmail(status: string, order: any) {
     const { email, name } = order.user;
     const displayName = name || email;

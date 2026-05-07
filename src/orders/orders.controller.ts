@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -29,5 +29,11 @@ export class OrdersController {
   @Patch(':id/status')
   updateStatus(@Param('id') id: string, @Body('status') status: string, @CurrentUser() user: any) {
     return this.orders.updateStatus(id, status, user.id, user.role);
+  }
+
+  @Patch(':id/refund')
+  refund(@Param('id') id: string, @Body('reason') reason: string, @CurrentUser() user: any) {
+    if (user.role === 'CLIENT') throw new ForbiddenException('Clients cannot process refunds');
+    return this.orders.refund(id, user.id, user.role, reason);
   }
 }
