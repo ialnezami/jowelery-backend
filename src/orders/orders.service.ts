@@ -208,4 +208,27 @@ export class OrdersService {
         break;
     }
   }
+
+  private async triggerPushNotification(status: string, order: any) {
+    const pushToken = await this.prisma.user.findUnique({
+      where: { id: order.userId ?? order.user?.id },
+      select: { pushToken: true },
+    });
+    if (!pushToken?.pushToken) return;
+    const orderNumber = order.orderNumber || order.id.slice(-8).toUpperCase();
+    const messages: Record<string, { title: string; body: string }> = {
+      PAYMENT_CONFIRMED: { title: 'Order Confirmed ✓', body: `Your order ${orderNumber} is confirmed.` },
+      PROCESSING:        { title: 'Order Processing', body: `Your order ${orderNumber} is being prepared.` },
+      READY_FOR_PICKUP:  { title: 'Ready for Pickup!', body: `Your order ${orderNumber} is ready to pick up.` },
+      SHIPPED:           { title: 'Order Shipped 🚚', body: `Your order ${orderNumber} is on its way!` },
+      OUT_FOR_DELIVERY:  { title: 'Out for Delivery 📦', body: `Your order ${orderNumber} is out for delivery.` },
+      DELIVERED:         { title: 'Order Delivered ✓', body: `Your order ${orderNumber} has been delivered.` },
+      COMPLETED:         { title: 'Order Completed', body: `Your order ${orderNumber} is complete. Thank you!` },
+      CANCELLED:         { title: 'Order Cancelled', body: `Your order ${orderNumber} has been cancelled.` },
+    };
+    const msg = messages[status];
+    if (msg) {
+      await this.email.sendPushNotification(pushToken.pushToken, msg.title, msg.body, { orderId: order.id });
+    }
+  }
 }

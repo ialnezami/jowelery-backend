@@ -16,6 +16,9 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AddressModule } from './address/address.module';
 import { RecipientsModule } from './recipients/recipients.module';
 import { ShopReviewsModule } from './shop-reviews/shop-reviews.module';
+import { CurrenciesModule } from './currencies/currencies.module';
+import { CouponsModule } from './coupons/coupons.module';
+import { PayoutsModule } from './payouts/payouts.module';
 
 @Module({
   imports: [
@@ -36,6 +39,9 @@ import { ShopReviewsModule } from './shop-reviews/shop-reviews.module';
     AddressModule,
     RecipientsModule,
     ShopReviewsModule,
+    CurrenciesModule,
+    CouponsModule,
+    PayoutsModule,
   ],
 })
 export class AppModule {}
