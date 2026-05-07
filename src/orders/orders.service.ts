@@ -132,10 +132,11 @@ export class OrdersService {
 
     const updated = await this.prisma.order.update({ where: { id }, data: { status: status as any } });
 
-    // Fire-and-forget email — never block the response
+    // Fire-and-forget email + push — never block the response
     if (EMAIL_TRIGGER_STATUSES.has(status) && order.user?.email) {
       this.triggerStatusEmail(status, order).catch(() => {});
     }
+    this.triggerPushNotification(status, order).catch(() => {});
 
     return updated;
   }

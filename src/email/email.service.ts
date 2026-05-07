@@ -2,6 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
+import axios from 'axios';
+
+const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
 @Injectable()
 export class EmailService {
@@ -124,6 +127,18 @@ export class EmailService {
         <p style="color:#6B7280;font-size:13px">This link expires in 1 hour. If you did not request a reset, ignore this email.</p>
       `)}
     `);
+  }
+
+  async sendPushNotification(pushToken: string, title: string, body: string, data?: Record<string, any>): Promise<void> {
+    if (!pushToken?.startsWith('ExponentPushToken')) return;
+    try {
+      await axios.post(EXPO_PUSH_URL, { to: pushToken, title, body, data, sound: 'default' }, {
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        timeout: 5000,
+      });
+    } catch (err: any) {
+      this.logger.error(`Push notification failed for ${pushToken}: ${err.message}`);
+    }
   }
 
   private layout(content: string): string {
