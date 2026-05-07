@@ -51,4 +51,53 @@ export class ShopsService {
     if (!shop) throw new NotFoundException('No shop found for this admin');
     return shop;
   }
+
+  async getCustomers(userId: string, userRole: string, query: { page?: number; limit?: number }) {
+    const { page = 1, limit = 20 } = query;
+
+    let shopId: string | undefined;
+    if (userRole === 'SHOP_ADMIN') {
+      const shop = await this.prisma.shop.findUnique({ where: { adminId: userId } });
+      if (!shop) throw new NotFoundException('No shop found for this admin');
+      shopId = shop.id;
+    }
+
+    const where: any = { status: { in: ['DELIVERED', 'COMPLETED', 'PROCESSING', 'PAYMENT_CONFIRMED', 'SHIPPED'] } };
+    if (shopId) where.shopId = shopId;
+
+    const orders = await this.prisma.order.findMany({
+      where,
+      select: {
+        userId: true,
+        total: true,
+        user: { select: { id: true, name: true, email: true, createdAt: true } },
+      },
+    });
+
+    // Aggregate per customer
+    const customerMap = new Map<string, { id: string; name: string | null; email: string; totalSpent: number; orderCount: number; joinedAt: Date }>();
+    for (const order of orders) {
+      const existing = customerMap.get(order.userId);
+      if (existing) {
+        existing.totalSpent += order.total;
+        existing.orderCount += 1;
+      } else {
+        customerMap.set(order.userId, {
+          id: order.user.id,
+          name: order.user.name,
+          email: order.user.email,
+          totalSpent: order.total,
+          orderCount: 1,
+          joinedAt: order.user.createdAt,
+        });
+      }
+    }
+
+    const customers = Array.from(customerMap.values())
+      .sort((a, b) => b.totalSpent - a.totalSpent);
+
+    const total = customers.length;
+    const start = (Number(page) - 1) * Number(limit);
+    return { customers: customers.slice(start, start + Number(limit)), total, page: Number(page) };
+  }
 }

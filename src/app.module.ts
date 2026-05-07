@@ -15,6 +15,7 @@ import { SystemConfigModule } from './system-config/system-config.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AddressModule } from './address/address.module';
 import { RecipientsModule } from './recipients/recipients.module';
+import { ShopReviewsModule } from './shop-reviews/shop-reviews.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { RecipientsModule } from './recipients/recipients.module';
     AnalyticsModule,
     AddressModule,
     RecipientsModule,
+    ShopReviewsModule,
   ],
 })
 export class AppModule {}

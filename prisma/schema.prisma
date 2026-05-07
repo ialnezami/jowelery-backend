@@ -74,6 +74,8 @@ model User {
   wishlistItems     WishlistItem[]
   passwordResetTokens PasswordResetToken[]
   chatSessions      ChatSession[]
+  shopReviews       ShopReview[]
+  pushToken         String?
 
   @@index([role])
   @@map("users")
@@ -103,6 +105,8 @@ model Shop {
   admin           User        @relation("ShopAdmin", fields: [adminId], references: [id])
   products        Product[]
   orders          Order[]
+  reviews         ShopReview[]
+  payouts         Payout[]
 
   @@index([status])
   @@map("shops")
@@ -156,6 +160,8 @@ model Order {
   shippingAddress Json?
   billingAddress  Json?
   notes           String?
+  couponCode      String?
+  discountAmount  Float?      @default(0)
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -397,4 +403,59 @@ model SystemConfig {
   updatedAt         DateTime @updatedAt
 
   @@map("systemConfig")
+}
+
+model Coupon {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  code            String    @unique
+  discountType    String    // PERCENTAGE | FIXED
+  discountValue   Float
+  minOrderAmount  Float?
+  maxUses         Int?
+  usedCount       Int       @default(0)
+  expiresAt       DateTime?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([isActive])
+  @@map("coupons")
+}
+
+model Payout {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  shopId      String    @db.ObjectId
+  amount      Float
+  currency    String    @default("USD")
+  status      String    @default("PENDING") // PENDING | PAID | FAILED
+  periodStart DateTime
+  periodEnd   DateTime
+  notes       String?
+  paidAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  shop        Shop      @relation(fields: [shopId], references: [id])
+
+  @@index([shopId])
+  @@index([status])
+  @@map("payouts")
+}
+
+model ShopReview {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  shopId    String   @db.ObjectId
+  rating    Int      // 1–5
+  comment   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+  shop      Shop     @relation(fields: [shopId], references: [id])
+
+  @@unique([userId, shopId])
+  @@index([shopId])
+  @@index([userId])
+  @@map("shopReviews")
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ShopsService } from './shops.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -35,6 +35,15 @@ export class ShopsController {
   @ApiBearerAuth()
   create(@Body() dto: any) {
     return this.shops.create(dto);
+  }
+
+  @Get('customers')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SHOP_ADMIN')
+  @ApiBearerAuth()
+  getCustomers(@CurrentUser() user: any, @Query() query: any) {
+    if (user.role === 'CLIENT') throw new ForbiddenException();
+    return this.shops.getCustomers(user.id, user.role, query);
   }
 
   @Patch(':id')

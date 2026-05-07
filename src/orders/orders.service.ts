@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
+import { CouponsService } from '../coupons/coupons.service';
 import { v4 as uuidv4 } from 'uuid';
 
 const EMAIL_TRIGGER_STATUSES = new Set(['PAYMENT_CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED']);
@@ -10,6 +11,7 @@ export class OrdersService {
   constructor(
     private prisma: PrismaService,
     private email: EmailService,
+    private coupons: CouponsService,
   ) {}
 
   async findAll(userId: string, userRole: string, query: { shopId?: string; status?: string; page?: number; limit?: number }) {
@@ -47,6 +49,7 @@ export class OrdersService {
       where: { id },
       include: {
         user: { select: { id: true, name: true, email: true } },
+        shop: { select: { id: true, name: true, logo: true } },
         items: { include: { product: true } },
         transactions: true,
       },
@@ -63,33 +66,53 @@ export class OrdersService {
   }
 
   async create(userId: string, data: any) {
-    const { items, shopId: providedShopId, shippingMethod, shippingAddress, paymentMethod, notes, currency = 'USD' } = data;
+    const { items, shopId: providedShopId, shippingMethod, shippingAddress, paymentMethod, notes, currency = 'USD', couponCode } = data;
     if (!items?.length) throw new BadRequestException('Order must contain at least one item');
     let shopId = providedShopId;
-    let total = 0;
+    let subtotal = 0;
     const orderItems: any[] = [];
 
     for (const item of items) {
       const product = await this.prisma.product.findUnique({ where: { id: item.productId } });
       if (!product) throw new NotFoundException(`Product ${item.productId} not found`);
       if (!shopId) shopId = product.shopId;
-      total += product.finalPrice * item.quantity;
+      subtotal += product.finalPrice * item.quantity;
       orderItems.push({ productId: item.productId, quantity: item.quantity, priceAtPurchase: product.finalPrice, currency });
     }
 
     if (!shopId) throw new BadRequestException('Could not determine shopId from order items');
 
-    return this.prisma.order.create({
+    let discountAmount = 0;
+    let appliedCouponCode: string | undefined;
+
+    if (couponCode) {
+      const result = await this.coupons.validate(couponCode, subtotal);
+      if (!result.valid) throw new BadRequestException(result.error || 'Invalid coupon');
+      discountAmount = result.discountAmount;
+      appliedCouponCode = result.coupon.code;
+    }
+
+    const total = Math.max(0, subtotal - discountAmount);
+
+    const order = await this.prisma.order.create({
       data: {
         userId, shopId,
         orderNumber: `JOW-${uuidv4().slice(0, 8).toUpperCase()}`,
         total, currency,
         status: 'PENDING_PAYMENT',
         paymentMethod, shippingMethod, shippingAddress, notes,
+        couponCode: appliedCouponCode,
+        discountAmount,
         items: { create: orderItems },
       },
       include: { items: true },
     });
+
+    if (appliedCouponCode) {
+      this.coupons.incrementUsage(appliedCouponCode).catch(() => {});
+    }
+
+    return order;
   }
 
   async updateStatus(id: string, status: string, userId: string, userRole: string) {

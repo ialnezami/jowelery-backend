@@ -50,6 +50,16 @@ export class UsersController {
     return this.users.changePassword(user.id, dto.currentPassword, dto.newPassword);
   }
 
+  @Post('push-token')
+  savePushToken(@CurrentUser() user: any, @Body('pushToken') pushToken: string) {
+    return this.users.update(user.id, { pushToken });
+  }
+
+  @Patch('me/currency')
+  updateCurrency(@CurrentUser() user: any, @Body('currency') currency: string) {
+    return this.users.update(user.id, { currencyPreference: currency });
+  }
+
   @Get(':id')
   @UseGuards(RolesGuard)
   @Roles('SUPER_ADMIN')
