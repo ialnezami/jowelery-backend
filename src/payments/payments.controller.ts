@@ -1,5 +1,6 @@
-import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Res } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Response } from 'express';
 import { PaymentsService } from './payments.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -16,7 +17,10 @@ export class PaymentsController {
   }
 
   @Post('webhook')
-  webhook(@Body() notification: any) {
-    return this.payments.handleWebhook(notification);
+  async webhook(@Body() body: any, @Res() res: Response) {
+    const result = await this.payments.handleWebhook(body);
+    // Adyen expects plain text `[accepted]` — not JSON
+    res.setHeader('Content-Type', 'text/plain');
+    res.send(result);
   }
 }

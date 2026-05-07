@@ -1,10 +1,16 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import { v4 as uuidv4 } from 'uuid';
+
+const EMAIL_TRIGGER_STATUSES = new Set(['PAYMENT_CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED']);
 
 @Injectable()
 export class OrdersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private email: EmailService,
+  ) {}
 
   async findAll(userId: string, userRole: string, query: { shopId?: string; status?: string; page?: number; limit?: number }) {
     const { shopId, status, page = 1, limit = 20 } = query;
@@ -87,7 +93,13 @@ export class OrdersService {
   }
 
   async updateStatus(id: string, status: string, userId: string, userRole: string) {
-    const order = await this.prisma.order.findUnique({ where: { id } });
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        items: { include: { product: { select: { id: true, name: true, finalPrice: true } } } },
+      },
+    });
     if (!order) throw new NotFoundException('Order not found');
 
     if (userRole === 'CLIENT') {
@@ -95,6 +107,44 @@ export class OrdersService {
       if (order.userId !== userId) throw new ForbiddenException();
     }
 
-    return this.prisma.order.update({ where: { id }, data: { status: status as any } });
+    const updated = await this.prisma.order.update({ where: { id }, data: { status: status as any } });
+
+    // Fire-and-forget email — never block the response
+    if (EMAIL_TRIGGER_STATUSES.has(status) && order.user?.email) {
+      this.triggerStatusEmail(status, order).catch(() => {});
+    }
+
+    return updated;
+  }
+
+  private async triggerStatusEmail(status: string, order: any) {
+    const { email, name } = order.user;
+    const displayName = name || email;
+    const orderNumber = order.orderNumber || order.id.slice(-8).toUpperCase();
+
+    switch (status) {
+      case 'PAYMENT_CONFIRMED':
+        await this.email.sendOrderConfirmed(email, {
+          name: displayName,
+          orderNumber,
+          total: order.total,
+          currency: order.currency || 'USD',
+          items: order.items.map((i: any) => ({
+            name: i.product?.name || 'Product',
+            quantity: i.quantity,
+            price: i.priceAtPurchase,
+          })),
+        });
+        break;
+      case 'SHIPPED':
+        await this.email.sendOrderShipped(email, { name: displayName, orderNumber });
+        break;
+      case 'DELIVERED':
+        await this.email.sendOrderDelivered(email, { name: displayName, orderNumber });
+        break;
+      case 'CANCELLED':
+        await this.email.sendOrderCancelled(email, { name: displayName, orderNumber });
+        break;
+    }
   }
 }

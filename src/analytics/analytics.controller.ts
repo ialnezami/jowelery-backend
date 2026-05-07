@@ -14,21 +14,32 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 export class AnalyticsController {
   constructor(private analytics: AnalyticsService) {}
 
+  private async resolveShopId(user: any, queryShopId?: string): Promise<string | undefined> {
+    if (user.role === 'SUPER_ADMIN') return queryShopId;
+    return this.analytics.getShopIdForAdmin(user.id);
+  }
+
   @Get('dashboard')
-  getDashboard(@CurrentUser() user: any, @Query('shopId') shopId?: string) {
-    const id = user.role === 'SUPER_ADMIN' ? shopId : undefined;
+  async getDashboard(@CurrentUser() user: any, @Query('shopId') shopId?: string) {
+    const id = await this.resolveShopId(user, shopId);
     return this.analytics.getDashboard(id);
   }
 
   @Get('orders-by-status')
-  getOrdersByStatus(@CurrentUser() user: any, @Query('shopId') shopId?: string) {
-    const id = user.role === 'SUPER_ADMIN' ? shopId : undefined;
+  async getOrdersByStatus(@CurrentUser() user: any, @Query('shopId') shopId?: string) {
+    const id = await this.resolveShopId(user, shopId);
     return this.analytics.getOrdersByStatus(id);
   }
 
   @Get('top-products')
-  getTopProducts(@CurrentUser() user: any, @Query('shopId') shopId?: string, @Query('limit') limit?: number) {
-    const id = user.role === 'SUPER_ADMIN' ? shopId : undefined;
+  async getTopProducts(@CurrentUser() user: any, @Query('shopId') shopId?: string, @Query('limit') limit?: number) {
+    const id = await this.resolveShopId(user, shopId);
     return this.analytics.getTopProducts(id, limit);
+  }
+
+  @Get('revenue-by-shop')
+  @Roles('SUPER_ADMIN')
+  getRevenueByShop() {
+    return this.analytics.getRevenueByShop();
   }
 }

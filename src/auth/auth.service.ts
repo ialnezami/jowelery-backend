@@ -5,7 +5,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import * as bcrypt from 'bcryptjs';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -16,6 +18,8 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
+    private config: ConfigService,
+    private email: EmailService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -66,6 +70,7 @@ export class AuthService {
 
   async forgotPassword(email: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
+    // Always return the same message to prevent user enumeration
     if (!user) return { message: 'If that email exists, a reset link was sent' };
 
     const token = randomBytes(32).toString('hex');
@@ -73,7 +78,16 @@ export class AuthService {
       data: { userId: user.id, token, expiresAt: new Date(Date.now() + 3600 * 1000) },
     });
 
-    return { message: 'Password reset email sent', token };
+    const frontendUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const resetLink = `${frontendUrl}/auth/reset-password?token=${token}`;
+
+    // Fire-and-forget — never leak token in response in production
+    this.email.sendPasswordReset(user.email, {
+      name: user.name || user.email,
+      resetLink,
+    }).catch(() => {});
+
+    return { message: 'If that email exists, a reset link was sent' };
   }
 
   async resetPassword(token: string, newPassword: string) {
