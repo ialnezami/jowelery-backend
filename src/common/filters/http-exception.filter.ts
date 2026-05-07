@@ -16,8 +16,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
         ? exception.getResponse()
         : 'Internal server error';
 
-    response.status(status).json(
-      typeof message === 'string' ? { error: message } : message,
-    );
+    let body: object;
+    if (typeof message === 'string') {
+      body = { error: message };
+    } else {
+      const msg = (message as any).message;
+      body = { error: Array.isArray(msg) ? msg.join(', ') : (msg ?? 'An error occurred') };
+    }
+    response.status(status).json(body);
   }
 }

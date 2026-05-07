@@ -14,6 +14,7 @@ import { UploadModule } from './upload/upload.module';
 import { SystemConfigModule } from './system-config/system-config.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AddressModule } from './address/address.module';
+import { RecipientsModule } from './recipients/recipients.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { AddressModule } from './address/address.module';
     SystemConfigModule,
     AnalyticsModule,
     AddressModule,
+    RecipientsModule,
   ],
 })
 export class AppModule {}

@@ -21,6 +21,16 @@ export class AuthController {
     return this.auth.register(dto);
   }
 
+  @Post('mobile-login')
+  mobileLogin(@Body() dto: LoginDto) {
+    return this.auth.login(dto);
+  }
+
+  @Post('mobile-register')
+  mobileRegister(@Body() dto: RegisterDto) {
+    return this.auth.register(dto);
+  }
+
   @Post('verify-token')
   verifyToken(@Body('token') token: string) {
     return this.auth.verifyToken(token);

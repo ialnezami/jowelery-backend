@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Put, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -28,6 +28,26 @@ export class UsersController {
   @Patch('me')
   updateMe(@CurrentUser() user: any, @Body() dto: any) {
     return this.users.update(user.id, dto);
+  }
+
+  @Get('profile')
+  getProfile(@CurrentUser() user: any) {
+    return this.users.findOne(user.id);
+  }
+
+  @Put('profile')
+  updateProfile(@CurrentUser() user: any, @Body() dto: any) {
+    return this.users.update(user.id, dto);
+  }
+
+  @Post('change-email')
+  changeEmail(@CurrentUser() user: any, @Body() dto: { currentPassword: string; newEmail: string }) {
+    return this.users.changeEmail(user.id, dto.currentPassword, dto.newEmail);
+  }
+
+  @Post('change-password')
+  changePassword(@CurrentUser() user: any, @Body() dto: { currentPassword: string; newPassword: string }) {
+    return this.users.changePassword(user.id, dto.currentPassword, dto.newPassword);
   }
 
   @Get(':id')

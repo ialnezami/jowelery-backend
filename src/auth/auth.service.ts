@@ -51,8 +51,10 @@ export class AuthService {
   async verifyToken(token: string) {
     try {
       const payload = this.jwt.verify(token);
+      const userId = payload.sub ?? payload.id;
+      if (!userId) throw new UnauthorizedException();
       const user = await this.prisma.user.findUnique({
-        where: { id: payload.sub },
+        where: { id: userId },
         select: { id: true, email: true, name: true, role: true },
       });
       if (!user) throw new UnauthorizedException();

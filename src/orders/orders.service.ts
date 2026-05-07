@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -57,16 +57,21 @@ export class OrdersService {
   }
 
   async create(userId: string, data: any) {
-    const { items, shopId, shippingMethod, shippingAddress, paymentMethod, notes, currency = 'USD' } = data;
+    const { items, shopId: providedShopId, shippingMethod, shippingAddress, paymentMethod, notes, currency = 'USD' } = data;
+    if (!items?.length) throw new BadRequestException('Order must contain at least one item');
+    let shopId = providedShopId;
     let total = 0;
     const orderItems: any[] = [];
 
     for (const item of items) {
       const product = await this.prisma.product.findUnique({ where: { id: item.productId } });
       if (!product) throw new NotFoundException(`Product ${item.productId} not found`);
+      if (!shopId) shopId = product.shopId;
       total += product.finalPrice * item.quantity;
       orderItems.push({ productId: item.productId, quantity: item.quantity, priceAtPurchase: product.finalPrice, currency });
     }
+
+    if (!shopId) throw new BadRequestException('Could not determine shopId from order items');
 
     return this.prisma.order.create({
       data: {
