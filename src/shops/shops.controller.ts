@@ -24,6 +24,15 @@ export class ShopsController {
     return this.shops.getMyShop(user.id);
   }
 
+  @Get('customers')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SHOP_ADMIN')
+  @ApiBearerAuth()
+  getCustomers(@CurrentUser() user: any, @Query() query: any) {
+    if (user.role === 'CLIENT') throw new ForbiddenException();
+    return this.shops.getCustomers(user.id, user.role, query);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.shops.findOne(id);
@@ -35,15 +44,6 @@ export class ShopsController {
   @ApiBearerAuth()
   create(@Body() dto: any) {
     return this.shops.create(dto);
-  }
-
-  @Get('customers')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('SHOP_ADMIN')
-  @ApiBearerAuth()
-  getCustomers(@CurrentUser() user: any, @Query() query: any) {
-    if (user.role === 'CLIENT') throw new ForbiddenException();
-    return this.shops.getCustomers(user.id, user.role, query);
   }
 
   @Patch(':id')
