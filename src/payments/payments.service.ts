@@ -42,6 +42,15 @@ export class PaymentsService {
     });
   }
 
+  async refundPayment(pspReference: string, amount: number, currency: string): Promise<void> {
+    await this.checkout.ModificationsApi.refundCapturedPayment(pspReference, {
+      amount: { value: Math.round(amount * 100), currency },
+      merchantAccount: this.config.get<string>('ADYEN_MERCHANT_ACCOUNT') || '',
+      reference: pspReference,
+    });
+    this.logger.log(`Refund requested for pspReference=${pspReference} amount=${amount} ${currency}`);
+  }
+
   async handleWebhook(body: any): Promise<string> {
     const items: any[] = body?.notificationItems ?? [];
 
@@ -76,7 +85,11 @@ export class PaymentsService {
     return '[accepted]';
   }
 
-  private async handleAuthorisationSuccess(orderId: string, pspReference: string, amount: any) {
+  private async handleAuthorisationSuccess(merchantReference: string, pspReference: string, amount: any) {
+    if (merchantReference.startsWith('RES_')) {
+      return this.handleReservationPaymentSuccess(merchantReference.slice(4), pspReference);
+    }
+    const orderId = merchantReference;
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -129,18 +142,46 @@ export class PaymentsService {
     }
   }
 
-  private async handlePaymentFailed(orderId: string, pspReference: string) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order || order.status !== 'PENDING_PAYMENT') return;
+  private async handleReservationPaymentSuccess(reservationId: string, pspReference: string) {
+    const reservation = await this.prisma.reservation.findUnique({ where: { id: reservationId } });
+    if (!reservation) {
+      this.logger.warn(`Reservation not found for webhook ref: ${reservationId}`);
+      return;
+    }
+    if (reservation.status !== 'PENDING_PAYMENT') {
+      this.logger.log(`Reservation ${reservationId} already at ${reservation.status} — skipping`);
+      return;
+    }
+    await this.prisma.reservation.update({
+      where: { id: reservationId },
+      data: { status: 'CONFIRMED', paymentRef: pspReference },
+    });
+    this.logger.log(`Reservation ${reservationId} CONFIRMED via webhook`);
+  }
 
+  private async handlePaymentFailed(merchantReference: string, pspReference: string) {
+    if (merchantReference.startsWith('RES_')) {
+      const reservationId = merchantReference.slice(4);
+      const reservation = await this.prisma.reservation.findUnique({ where: { id: reservationId } });
+      if (!reservation || reservation.status !== 'PENDING_PAYMENT') return;
+      await this.prisma.reservation.update({
+        where: { id: reservationId },
+        data: { status: 'CANCELLED', cancelledAt: new Date() },
+      });
+      this.logger.log(`Reservation ${reservationId} CANCELLED — payment failed`);
+      return;
+    }
+    // existing order handling below — keep unchanged
+    const order = await this.prisma.order.findUnique({ where: { id: merchantReference } });
+    if (!order || order.status !== 'PENDING_PAYMENT') return;
     await this.prisma.$transaction([
       this.prisma.order.update({
-        where: { id: orderId },
+        where: { id: merchantReference },
         data: { status: 'CANCELLED', paymentStatus: 'failed' },
       }),
       this.prisma.transaction.create({
         data: {
-          orderId,
+          orderId: merchantReference,
           amount: order.total,
           currency: order.currency,
           paymentMethod: order.paymentMethod ?? 'card',
