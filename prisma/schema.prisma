@@ -58,6 +58,8 @@ enum ReservationStatus {
   ACTIVE
   RETURNED
   CANCELLED
+  REFUND_PENDING
+  REFUNDED
 }
 
 model User {
@@ -170,10 +172,11 @@ model Reservation {
 
   startDate   DateTime
   endDate     DateTime
-  totalDays   Int
+  totalDays   Int               // write-once snapshot, set at booking creation
   dailyRate   Float
   totalPrice  Float
   quantity    Int               @default(1)
+  currency      String            @default("USD")
 
   status      ReservationStatus @default(PENDING_PAYMENT)
   paymentRef  String?
@@ -186,6 +189,9 @@ model Reservation {
   @@index([clientId])
   @@index([shopId])
   @@index([productId])
+  @@index([status])
+  @@index([productId, startDate, endDate])
+  @@index([productId, status])
   @@map("reservations")
 }
 
