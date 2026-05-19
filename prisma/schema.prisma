@@ -52,6 +52,14 @@ enum ShopStatus {
   INACTIVE
 }
 
+enum ReservationStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  ACTIVE
+  RETURNED
+  CANCELLED
+}
+
 model User {
   id                String    @id @default(auto()) @map("_id") @db.ObjectId
   email             String    @unique
@@ -75,6 +83,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   chatSessions      ChatSession[]
   shopReviews       ShopReview[]
+  reservations      Reservation[]  @relation("ClientReservations")
   pushToken         String?
 
   @@index([role])
@@ -107,6 +116,7 @@ model Shop {
   orders          Order[]
   reviews         ShopReview[]
   payouts         Payout[]
+  reservations    Reservation[]
 
   @@index([status])
   @@map("shops")
@@ -129,6 +139,9 @@ model Product {
   stockQuantity   Int             @default(0)
   sku             String          @unique
   isActive        Boolean         @default(true)
+  isRentable      Boolean         @default(false)
+  dailyRentalRate Float?
+  rentalStock     Int             @default(0)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
@@ -137,12 +150,43 @@ model Product {
   orderItems      OrderItem[]
   cartItems       CartItem[]
   wishlistItems   WishlistItem[]
+  reservations    Reservation[]
 
   @@index([shopId])
   @@index([category])
   @@index([karat])
   @@index([isActive])
   @@map("products")
+}
+
+model Reservation {
+  id          String            @id @default(auto()) @map("_id") @db.ObjectId
+  client      User              @relation("ClientReservations", fields: [clientId], references: [id])
+  clientId    String            @db.ObjectId
+  product     Product           @relation(fields: [productId], references: [id])
+  productId   String            @db.ObjectId
+  shop        Shop              @relation(fields: [shopId], references: [id])
+  shopId      String            @db.ObjectId
+
+  startDate   DateTime
+  endDate     DateTime
+  totalDays   Int
+  dailyRate   Float
+  totalPrice  Float
+  quantity    Int               @default(1)
+
+  status      ReservationStatus @default(PENDING_PAYMENT)
+  paymentRef  String?
+
+  cancelledAt DateTime?
+  returnedAt  DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([clientId])
+  @@index([shopId])
+  @@index([productId])
+  @@map("reservations")
 }
 
 model Order {
@@ -396,6 +440,7 @@ model SystemConfig {
   key               String   @unique // e.g., "main_config"
   singleShopMode    Boolean  @default(false)
   defaultShopId     String?  @db.ObjectId // Required if singleShopMode is true
+  rentalEnabled     Boolean  @default(false)
 
   // Payment Methods Configuration
   paymentMethods    PaymentMethodConfig[]
