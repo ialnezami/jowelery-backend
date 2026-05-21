@@ -43,12 +43,21 @@ export class PaymentsService {
   }
 
   async refundPayment(pspReference: string, amount: number, currency: string): Promise<void> {
-    await this.checkout.ModificationsApi.refundCapturedPayment(pspReference, {
-      amount: { value: Math.round(amount * 100), currency },
-      merchantAccount: this.config.get<string>('ADYEN_MERCHANT_ACCOUNT') || '',
-      reference: pspReference,
-    });
-    this.logger.log(`Refund requested for pspReference=${pspReference} amount=${amount} ${currency}`);
+    try {
+      await this.checkout.ModificationsApi.refundCapturedPayment(pspReference, {
+        amount: { value: Math.round(amount * 100), currency },
+        merchantAccount: this.config.get<string>('ADYEN_MERCHANT_ACCOUNT') || '',
+        reference: pspReference,
+      });
+      this.logger.log(`Refund initiated pspReference=${pspReference} amount=${amount} ${currency}`);
+    } catch (err: any) {
+      this.logger.error(`Adyen refund failed pspReference=${pspReference}`, {
+        statusCode: err?.statusCode,
+        errorCode: err?.errorCode,
+        message: err?.message,
+      });
+      throw new Error(`Refund failed: ${err?.message ?? 'Adyen error'}`);
+    }
   }
 
   async handleWebhook(body: any): Promise<string> {
@@ -143,19 +152,14 @@ export class PaymentsService {
   }
 
   private async handleReservationPaymentSuccess(reservationId: string, pspReference: string) {
-    const reservation = await this.prisma.reservation.findUnique({ where: { id: reservationId } });
-    if (!reservation) {
-      this.logger.warn(`Reservation not found for webhook ref: ${reservationId}`);
-      return;
-    }
-    if (reservation.status !== 'PENDING_PAYMENT') {
-      this.logger.log(`Reservation ${reservationId} already at ${reservation.status} — skipping`);
-      return;
-    }
-    await this.prisma.reservation.update({
-      where: { id: reservationId },
+    const result = await this.prisma.reservation.updateMany({
+      where: { id: reservationId, status: 'PENDING_PAYMENT' },
       data: { status: 'CONFIRMED', paymentRef: pspReference },
     });
+    if (result.count === 0) {
+      this.logger.log(`Reservation ${reservationId} already processed — skipping`);
+      return;
+    }
     this.logger.log(`Reservation ${reservationId} CONFIRMED via webhook`);
   }
 
