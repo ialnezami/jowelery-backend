@@ -10,10 +10,11 @@ export class GoldRatesService {
   async getCurrent() {
     const rates: Record<string, any> = {};
     for (const karat of KARATS) {
-      rates[karat] = await this.prisma.goldRate.findFirst({
+      const row = await this.prisma.goldRate.findFirst({
         where: { karat: karat as any },
         orderBy: { timestamp: 'desc' },
       });
+      if (row) rates[karat] = row;
     }
     return rates;
   }

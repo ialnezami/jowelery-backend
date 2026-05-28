@@ -36,14 +36,40 @@ export class ShopsService {
   }
 
   async create(data: any) {
-    return this.prisma.shop.create({ data });
+    const { adminId, ...rest } = data;
+    if (!adminId) return this.prisma.shop.create({ data });
+
+    return this.prisma.$transaction(async (tx) => {
+      const shop = await tx.shop.create({ data: { ...rest, adminId } });
+      await tx.user.update({ where: { id: adminId }, data: { role: 'SHOP_ADMIN' } });
+      return shop;
+    });
   }
 
   async update(id: string, data: any, userId: string, userRole: string) {
     const shop = await this.prisma.shop.findUnique({ where: { id } });
     if (!shop) throw new NotFoundException('Shop not found');
     if (userRole === 'SHOP_ADMIN' && shop.adminId !== userId) throw new ForbiddenException('Not your shop');
-    return this.prisma.shop.update({ where: { id }, data });
+
+    const incomingAdminId = data.adminId;
+    const adminChanging = incomingAdminId && incomingAdminId !== shop.adminId;
+
+    if (!adminChanging) return this.prisma.shop.update({ where: { id }, data });
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.shop.update({ where: { id }, data });
+
+      await tx.user.update({ where: { id: incomingAdminId }, data: { role: 'SHOP_ADMIN' } });
+
+      if (shop.adminId) {
+        const stillAdmin = await tx.shop.findFirst({ where: { adminId: shop.adminId } });
+        if (!stillAdmin) {
+          await tx.user.update({ where: { id: shop.adminId }, data: { role: 'CLIENT' } });
+        }
+      }
+
+      return updated;
+    });
   }
 
   async getMyShop(adminId: string) {
