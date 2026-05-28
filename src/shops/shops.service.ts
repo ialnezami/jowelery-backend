@@ -13,7 +13,12 @@ export class ShopsService {
     const [shops, total] = await Promise.all([
       this.prisma.shop.findMany({
         where,
-        select: { id: true, name: true, logo: true, banner: true, description: true, city: true, country: true, status: true },
+        select: {
+          id: true, name: true, logo: true, banner: true, description: true,
+          city: true, country: true, status: true,
+          admin: { select: { id: true, name: true, email: true } },
+          _count: { select: { products: true, orders: true } },
+        },
         skip: (Number(page) - 1) * Number(limit),
         take: Number(limit),
       }),
