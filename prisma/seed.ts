@@ -46,15 +46,13 @@ async function main() {
   console.log('✓ CLIENT:', client.email)
 
   // Seed a default gold rate
-  const existing = await prisma.goldRate.findFirst({ orderBy: { createdAt: 'desc' } })
+  const existing = await prisma.goldRate.findFirst({ orderBy: { timestamp: 'desc' } })
   if (!existing) {
     await prisma.goldRate.create({
       data: {
-        ratePerGram: 85,
+        rate: 85,
         karat: 'K24',
         currency: 'USD',
-        isActive: true,
-        setBy: superAdmin.id,
       },
     })
     console.log('✓ Gold rate seeded (K24 $85/g)')
@@ -65,10 +63,8 @@ async function main() {
   if (!config) {
     await prisma.systemConfig.create({
       data: {
+        key: 'main_config',
         singleShopMode: false,
-        maintenanceMode: false,
-        currency: 'USD',
-        updatedBy: superAdmin.id,
       },
     })
     console.log('✓ SystemConfig seeded')
