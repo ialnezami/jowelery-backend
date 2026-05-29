@@ -36,6 +36,7 @@ export class ChatController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   linkSession(@Body('sessionToken') sessionToken: string, @CurrentUser() user: any) {
+    if (!sessionToken?.trim()) return;
     return this.chat.linkSession(sessionToken, user.id);
   }
 

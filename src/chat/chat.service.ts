@@ -63,10 +63,6 @@ export class ChatService {
       throw new BadRequestException('Session is closed');
     }
 
-    if (!session.userId && session.guestMsgCount >= GUEST_MSG_LIMIT) {
-      throw new ForbiddenException({ code: 'GUEST_LIMIT', message: 'Guest message limit reached' });
-    }
-
     if (session.status === 'HUMAN') {
       await this.prisma.chatMessage.create({
         data: { sessionId: session.id, role: 'USER', content: sanitized },
@@ -74,11 +70,20 @@ export class ChatService {
       return { reply: 'Your message has been sent to our support agent. They will reply shortly.', isHuman: true };
     }
 
+    // Atomic guest limit check + increment in one operation to prevent race conditions
+    // where two concurrent requests both pass a non-atomic check.
+    // Tradeoff: if the Claude call fails after this, the guest loses one attempt.
+    // Acceptable: Claude failures should be rare and the limit is a soft abuse guard.
+    let newGuestMsgCount = session.guestMsgCount;
     if (!session.userId) {
-      await this.prisma.chatSession.update({
-        where: { id: session.id },
+      const result = await this.prisma.chatSession.updateMany({
+        where: { id: session.id, guestMsgCount: { lt: GUEST_MSG_LIMIT } },
         data: { guestMsgCount: { increment: 1 } },
       });
+      if (result.count === 0) {
+        throw new ForbiddenException({ code: 'GUEST_LIMIT', message: 'Guest message limit reached' });
+      }
+      newGuestMsgCount = session.guestMsgCount + 1;
     }
 
     const history = session.messages.map((m) => ({
@@ -109,12 +114,10 @@ export class ChatService {
       }),
     ]);
 
-    const updatedSession = await this.prisma.chatSession.findUnique({ where: { id: session.id } });
-
     return {
       reply: aiReply,
       isHuman: false,
-      guestMsgCount: updatedSession?.guestMsgCount ?? 0,
+      guestMsgCount: newGuestMsgCount,
     };
   }
 
@@ -170,6 +173,9 @@ export class ChatService {
     if (!session) throw new NotFoundException('Session not found');
     if (session.status === 'CLOSED') throw new BadRequestException('Session is closed');
     if (session.status !== 'HUMAN') throw new BadRequestException('Claim the session before replying');
+    if (session.agentId && session.agentId !== agentId) {
+      throw new ForbiddenException('This session is claimed by another agent');
+    }
     const sanitized = dto.message.replace(/<[^>]*>/g, '').trim();
     return this.prisma.chatMessage.create({
       data: { sessionId: id, role: 'AGENT', content: sanitized },
