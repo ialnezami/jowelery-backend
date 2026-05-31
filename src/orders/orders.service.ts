@@ -66,7 +66,7 @@ export class OrdersService {
   }
 
   async create(userId: string, data: any) {
-    const { items, shopId: providedShopId, shippingMethod, shippingAddress, paymentMethod, notes, currency = 'USD', couponCode } = data;
+    const { items, shopId: providedShopId, shippingMethod, shippingAddress, paymentMethod, notes, currency = 'KWD', couponCode } = data;
     if (!items?.length) throw new BadRequestException('Order must contain at least one item');
     let shopId = providedShopId;
     let subtotal = 0;
