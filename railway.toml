@@ -4,7 +4,7 @@ dockerfilePath = "Dockerfile"
 dockerTarget = "prod"
 
 [deploy]
-healthcheckPath = "/api/gold-rates"
+healthcheckPath = "/api/health"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
