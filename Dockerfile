@@ -25,7 +25,7 @@ RUN npx prisma generate
 RUN npm run build
 
 # Compile seed standalone (no DB needed at build time)
-RUN npx tsc prisma/seed.ts --module commonjs --target es2020 --esModuleInterop --resolveJsonModule --outDir dist --skipLibCheck 2>/dev/null || true
+RUN npx tsc prisma/seed.ts --module commonjs --target es2020 --esModuleInterop --resolveJsonModule --outDir dist --rootDir . --skipLibCheck 2>/dev/null || true
 
 # ── Stage: dev ────────────────────────────────────────────────────────────────
 FROM all-deps AS dev
