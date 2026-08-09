@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
 
-const EXCHANGE_API = 'https://open.er-api.com/v6/latest/USD';
+const TWELVE_DATA_API = 'https://api.twelvedata.com/exchange_rate';
 
 // Default currencies to seed if none exist
 const DEFAULT_CURRENCIES = [
@@ -40,22 +40,27 @@ export class CurrenciesService {
 
   async syncRates() {
     try {
-      const { data } = await axios.get(EXCHANGE_API, { timeout: 10000 });
-      const rates: Record<string, number> = data.rates;
-
-      // Ensure defaults exist first
       await this.seed();
 
-      // Update each known currency with live rate
       const currencies = await this.prisma.currency.findMany();
+      const apiKey = process.env.TWELVE_DATA_API_KEY;
+
       for (const currency of currencies) {
         if (currency.code === 'USD') continue;
-        const rate = rates[currency.code];
-        if (rate) {
-          await this.prisma.currency.update({
-            where: { code: currency.code },
-            data: { exchangeRateToBase: rate },
+        try {
+          const { data } = await axios.get(TWELVE_DATA_API, {
+            params: { symbol: `USD/${currency.code}`, apikey: apiKey },
+            timeout: 8000,
           });
+          const rate = parseFloat(data.rate);
+          if (!isNaN(rate) && rate > 0) {
+            await this.prisma.currency.update({
+              where: { code: currency.code },
+              data: { exchangeRateToBase: rate },
+            });
+          }
+        } catch {
+          this.logger.warn(`Failed to fetch rate for ${currency.code}, keeping existing`);
         }
       }
 
