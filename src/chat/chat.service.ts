@@ -6,7 +6,7 @@ import {
   ConflictException,
   Logger,
 } from '@nestjs/common';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PrismaService } from '../prisma/prisma.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { AdminReplyDto } from './dto/admin-reply.dto';
@@ -32,7 +32,7 @@ Rules:
 
 @Injectable()
 export class ChatService {
-  private readonly anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  private readonly genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? '');
   private readonly logger = new Logger(ChatService.name);
 
   constructor(private prisma: PrismaService) {}
@@ -93,15 +93,19 @@ export class ChatService {
 
     let aiReply: string;
     try {
-      const response = await this.anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 512,
-        system: SYSTEM_PROMPT,
-        messages: [...history, { role: 'user', content: sanitized }],
+      const model = this.genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+        systemInstruction: SYSTEM_PROMPT,
       });
-      aiReply = (response.content[0] as { text: string }).text;
+      const geminiHistory = history.map((m) => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.content }],
+      }));
+      const chat = model.startChat({ history: geminiHistory });
+      const result = await chat.sendMessage(sanitized);
+      aiReply = result.response.text();
     } catch (err) {
-      this.logger.error('Anthropic API error', err);
+      this.logger.error('Gemini API error', err);
       throw new BadRequestException('AI service unavailable, please try again');
     }
 
