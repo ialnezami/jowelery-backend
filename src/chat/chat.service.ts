@@ -94,7 +94,7 @@ export class ChatService {
     let aiReply: string;
     try {
       const model = this.genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.0-flash',
         systemInstruction: SYSTEM_PROMPT,
       });
       const geminiHistory = history.map((m) => ({
