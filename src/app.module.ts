@@ -23,6 +23,8 @@ import { CurrenciesModule } from './currencies/currencies.module';
 import { CouponsModule } from './coupons/coupons.module';
 import { PayoutsModule } from './payouts/payouts.module';
 import { ChatModule } from './chat/chat.module';
+import { ProductItemsModule } from './product-items/product-items.module';
+import { ItemTransfersModule } from './item-transfers/item-transfers.module';
 
 @Module({
   controllers: [AppController],
@@ -50,6 +52,8 @@ import { ChatModule } from './chat/chat.module';
     CouponsModule,
     PayoutsModule,
     ChatModule,
+    ProductItemsModule,
+    ItemTransfersModule,
   ],
 })
 export class AppModule {}

@@ -19,4 +19,15 @@ export class UploadService {
         .end(file.buffer);
     });
   }
+
+  async uploadVideo(file: Express.Multer.File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      cloudinary.uploader
+        .upload_stream({ folder: 'jowelery/videos', resource_type: 'video' }, (err, result) => {
+          if (err) reject(err);
+          else resolve(result!.secure_url);
+        })
+        .end(file.buffer);
+    });
+  }
 }

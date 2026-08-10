@@ -19,4 +19,15 @@ export class UploadController {
     const url = await this.upload.uploadImage(file);
     return { url };
   }
+
+  @Post('video')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: memoryStorage(),
+    limits: { fileSize: 100 * 1024 * 1024 },
+  }))
+  async uploadVideo(@UploadedFile() file: Express.Multer.File) {
+    const url = await this.upload.uploadVideo(file);
+    return { url };
+  }
 }

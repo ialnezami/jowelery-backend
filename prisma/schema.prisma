@@ -62,6 +62,19 @@ enum ReservationStatus {
   REFUNDED
 }
 
+enum ProductItemStatus {
+  IN_STOCK
+  SOLD
+  IN_TRANSIT
+}
+
+enum TransferStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  CANCELLED
+}
+
 model User {
   id                String    @id @default(auto()) @map("_id") @db.ObjectId
   email             String    @unique
@@ -86,7 +99,8 @@ model User {
   chatSessions      ChatSession[]
   shopReviews       ShopReview[]
   reservations      Reservation[]  @relation("ClientReservations")
-  pushToken         String?
+  pushToken          String?
+  initiatedTransfers ItemTransfer[] @relation("InitiatedTransfers")
 
   @@index([role])
   @@map("users")
@@ -113,12 +127,15 @@ model Shop {
   updatedAt       DateTime    @updatedAt
 
   // Relations
-  admin           User        @relation("ShopAdmin", fields: [adminId], references: [id])
+  admin           User          @relation("ShopAdmin", fields: [adminId], references: [id])
   products        Product[]
   orders          Order[]
   reviews         ShopReview[]
   payouts         Payout[]
   reservations    Reservation[]
+  productItems    ProductItem[] @relation("ShopItems")
+  transfersFrom   ItemTransfer[] @relation("TransfersFrom")
+  transfersTo     ItemTransfer[] @relation("TransfersTo")
 
   @@index([status])
   @@map("shops")
@@ -136,6 +153,7 @@ model Product {
   basePricePerGram Float?         // stored for reference
   finalPrice      Float           // calculated price
   images          String[]        // array of image URLs
+  videos          String[]        // array of video URLs
   description     String?
   descriptionTranslations Json?   // { en: "...", ar: "..." }
   stockQuantity   Int             @default(0)
@@ -153,6 +171,7 @@ model Product {
   cartItems       CartItem[]
   wishlistItems   WishlistItem[]
   reservations    Reservation[]
+  productItems    ProductItem[]
 
   @@index([shopId])
   @@index([category])
@@ -510,4 +529,50 @@ model ShopReview {
   @@index([shopId])
   @@index([userId])
   @@map("shopReviews")
+}
+
+model ProductItem {
+  id           String            @id @default(auto()) @map("_id") @db.ObjectId
+  serialNumber String            @unique
+  productId    String            @db.ObjectId
+  shopId       String            @db.ObjectId
+  status       ProductItemStatus @default(IN_STOCK)
+  orderId      String?
+  notes        String?
+  events       Json[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  product      Product           @relation(fields: [productId], references: [id])
+  shop         Shop              @relation("ShopItems", fields: [shopId], references: [id])
+  transfers    ItemTransfer[]
+
+  @@index([productId])
+  @@index([shopId])
+  @@index([status])
+  @@map("productItems")
+}
+
+model ItemTransfer {
+  id          String         @id @default(auto()) @map("_id") @db.ObjectId
+  itemId      String         @db.ObjectId
+  fromShopId  String         @db.ObjectId
+  toShopId    String         @db.ObjectId
+  initiatedBy String         @db.ObjectId
+  status      TransferStatus @default(PENDING)
+  notes       String?
+  resolvedAt  DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  item        ProductItem    @relation(fields: [itemId], references: [id])
+  fromShop    Shop           @relation("TransfersFrom", fields: [fromShopId], references: [id])
+  toShop      Shop           @relation("TransfersTo",   fields: [toShopId],   references: [id])
+  initiator   User           @relation("InitiatedTransfers", fields: [initiatedBy], references: [id])
+
+  @@index([itemId])
+  @@index([fromShopId])
+  @@index([toShopId])
+  @@index([status])
+  @@map("itemTransfers")
 }
