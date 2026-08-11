@@ -25,6 +25,7 @@ import { PayoutsModule } from './payouts/payouts.module';
 import { ChatModule } from './chat/chat.module';
 import { ProductItemsModule } from './product-items/product-items.module';
 import { ItemTransfersModule } from './item-transfers/item-transfers.module';
+import { GoldSaleOffersModule } from './gold-sale-offers/gold-sale-offers.module';
 
 @Module({
   controllers: [AppController],
@@ -54,6 +55,7 @@ import { ItemTransfersModule } from './item-transfers/item-transfers.module';
     ChatModule,
     ProductItemsModule,
     ItemTransfersModule,
+    GoldSaleOffersModule,
   ],
 })
 export class AppModule {}
