@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { ConfigModule } from '@nestjs/config';
+import { CacheModule } from '@nestjs/cache-manager';
+import { redisStore } from 'cache-manager-ioredis-yet';
+import { CommonCacheModule } from './common/cache/cache.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
@@ -31,6 +34,15 @@ import { GoldSaleOffersModule } from './gold-sale-offers/gold-sale-offers.module
   controllers: [AppController],
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    CacheModule.registerAsync({
+      isGlobal: true,
+      useFactory: () => ({
+        store: redisStore,
+        url: process.env.REDIS_URL || 'redis://localhost:6379',
+        ttl: 300 * 1000,
+      }),
+    }),
+    CommonCacheModule,
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
     ScheduleModule.forRoot(),
     PrismaModule,
