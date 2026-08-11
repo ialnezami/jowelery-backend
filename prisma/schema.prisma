@@ -101,6 +101,7 @@ model User {
   reservations      Reservation[]  @relation("ClientReservations")
   pushToken          String?
   initiatedTransfers ItemTransfer[] @relation("InitiatedTransfers")
+  goldSaleOffers     GoldSaleOffer[] @relation("ClientGoldOffers")
 
   @@index([role])
   @@map("users")
@@ -123,6 +124,8 @@ model Shop {
   status          ShopStatus  @default(ACTIVE)
   bankDetails     Json?
   shippingMethods String[]    @default(["PICKUP", "DELIVERY"]) // Available shipping methods: PICKUP, DELIVERY
+  lat             Float?
+  lng             Float?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -136,6 +139,7 @@ model Shop {
   productItems    ProductItem[] @relation("ShopItems")
   transfersFrom   ItemTransfer[] @relation("TransfersFrom")
   transfersTo     ItemTransfer[] @relation("TransfersTo")
+  goldSaleOffers  GoldSaleOffer[]
 
   @@index([status])
   @@map("shops")
@@ -467,6 +471,7 @@ model SystemConfig {
   singleShopMode    Boolean  @default(false)
   defaultShopId     String?  @db.ObjectId // Required if singleShopMode is true
   rentalEnabled     Boolean  @default(false)
+  goldBuybackDeductionPerGram Float @default(2.0)
 
   // Payment Methods Configuration
   paymentMethods    PaymentMethodConfig[]
@@ -575,4 +580,41 @@ model ItemTransfer {
   @@index([toShopId])
   @@index([status])
   @@map("itemTransfers")
+}
+
+enum GoldSaleOfferStatus {
+  PENDING_SHOP
+  PENDING_QUOTE
+  QUOTED
+  ACCEPTED
+  IN_REVIEW
+  PAID
+  REJECTED
+  CANCELLED
+}
+
+model GoldSaleOffer {
+  id             String               @id @default(auto()) @map("_id") @db.ObjectId
+  clientId       String               @db.ObjectId
+  karat          GoldKarat
+  weightGrams    Float
+  condition      String
+  images         String[]
+  estimatedPrice Float
+  clientLat      Float
+  clientLng      Float
+  shopId         String?              @db.ObjectId
+  shopQuote      Float?
+  status         GoldSaleOfferStatus  @default(PENDING_SHOP)
+  notes          String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  client         User                 @relation("ClientGoldOffers", fields: [clientId], references: [id])
+  shop           Shop?                @relation(fields: [shopId], references: [id])
+
+  @@index([clientId])
+  @@index([shopId])
+  @@index([status])
+  @@map("goldSaleOffers")
 }
