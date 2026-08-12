@@ -1,6 +1,11 @@
 import { Module } from '@nestjs/common';
 import { SystemConfigService } from './system-config.service';
 import { SystemConfigController } from './system-config.controller';
+import { CommonCacheModule } from '../common/cache/cache.module';
 
-@Module({ providers: [SystemConfigService], controllers: [SystemConfigController] })
+@Module({
+  imports: [CommonCacheModule],
+  providers: [SystemConfigService],
+  controllers: [SystemConfigController],
+})
 export class SystemConfigModule {}
