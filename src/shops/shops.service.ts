@@ -1,11 +1,21 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CacheService } from '../common/cache/cache.service';
+
+const SHOPS_LIST_KEY = 'shops:list';
+const SHOPS_LIST_TTL = 300;
 
 @Injectable()
 export class ShopsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cache: CacheService,
+  ) {}
 
   async findAll(query: { status?: string; page?: number; limit?: number }) {
+    const cached = await this.cache.get<any>(SHOPS_LIST_KEY);
+    if (cached) return cached;
+
     const { status = 'ACTIVE', page = 1, limit = 20 } = query;
     const where: any = {};
     if (status) where.status = status;
@@ -25,7 +35,9 @@ export class ShopsService {
       this.prisma.shop.count({ where }),
     ]);
 
-    return { shops, total, page };
+    const result = { shops, total, page };
+    await this.cache.set(SHOPS_LIST_KEY, result, SHOPS_LIST_TTL);
+    return result;
   }
 
   async findOne(id: string) {
@@ -42,13 +54,18 @@ export class ShopsService {
 
   async create(data: any) {
     const { adminId, ...rest } = data;
-    if (!adminId) return this.prisma.shop.create({ data });
-
-    return this.prisma.$transaction(async (tx) => {
-      const shop = await tx.shop.create({ data: { ...rest, adminId } });
-      await tx.user.update({ where: { id: adminId }, data: { role: 'SHOP_ADMIN' } });
-      return shop;
-    });
+    let shop: any;
+    if (!adminId) {
+      shop = await this.prisma.shop.create({ data });
+    } else {
+      shop = await this.prisma.$transaction(async (tx) => {
+        const s = await tx.shop.create({ data: { ...rest, adminId } });
+        await tx.user.update({ where: { id: adminId }, data: { role: 'SHOP_ADMIN' } });
+        return s;
+      });
+    }
+    await this.cache.del(SHOPS_LIST_KEY);
+    return shop;
   }
 
   async update(id: string, data: any, userId: string, userRole: string) {
@@ -59,22 +76,27 @@ export class ShopsService {
     const incomingAdminId = data.adminId;
     const adminChanging = incomingAdminId && incomingAdminId !== shop.adminId;
 
-    if (!adminChanging) return this.prisma.shop.update({ where: { id }, data });
+    let result: any;
+    if (!adminChanging) {
+      result = await this.prisma.shop.update({ where: { id }, data });
+    } else {
+      result = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.shop.update({ where: { id }, data });
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.shop.update({ where: { id }, data });
+        await tx.user.update({ where: { id: incomingAdminId }, data: { role: 'SHOP_ADMIN' } });
 
-      await tx.user.update({ where: { id: incomingAdminId }, data: { role: 'SHOP_ADMIN' } });
-
-      if (shop.adminId) {
-        const stillAdmin = await tx.shop.findFirst({ where: { adminId: shop.adminId } });
-        if (!stillAdmin) {
-          await tx.user.update({ where: { id: shop.adminId }, data: { role: 'CLIENT' } });
+        if (shop.adminId) {
+          const stillAdmin = await tx.shop.findFirst({ where: { adminId: shop.adminId } });
+          if (!stillAdmin) {
+            await tx.user.update({ where: { id: shop.adminId }, data: { role: 'CLIENT' } });
+          }
         }
-      }
 
-      return updated;
-    });
+        return updated;
+      });
+    }
+    await this.cache.del(SHOPS_LIST_KEY);
+    return result;
   }
 
   async getMyShop(adminId: string) {
