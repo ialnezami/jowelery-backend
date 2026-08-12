@@ -1,20 +1,36 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
+import { CacheService } from '../common/cache/cache.service';
 
 const KARAT_PURITY: Record<string, number> = {
   K24: 1.0, K22: 0.9167, K21: 0.875, K18: 0.75, K14: 0.5833,
 };
 
+const PRODUCTS_LIST_TTL = 120;
+const PRODUCTS_LIST_PATTERN = 'products:list:*';
+
+function productListKey(query: object): string {
+  return `products:list:${createHash('sha256').update(JSON.stringify(query)).digest('hex').slice(0, 16)}`;
+}
+
 @Injectable()
 export class ProductsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cache: CacheService,
+  ) {}
 
   async findAll(query: {
     shopId?: string; category?: string; karat?: string;
     minPrice?: number; maxPrice?: number; search?: string;
     page?: number; limit?: number;
   }) {
+    const key = productListKey(query);
+    const cached = await this.cache.get<any>(key);
+    if (cached) return cached;
+
     const { shopId, category, karat, minPrice, maxPrice, search, page = 1, limit = 20 } = query;
     const where: any = { isActive: true };
     if (shopId) where.shopId = shopId;
@@ -43,7 +59,15 @@ export class ProductsService {
       this.prisma.product.count({ where }),
     ]);
 
-    return { products, total, page: Number(page), limit: Number(limit), pages: Math.ceil(total / Number(limit)) };
+    const result = {
+      products,
+      total,
+      page: Number(page),
+      limit: Number(limit),
+      pages: Math.ceil(total / Number(limit)),
+    };
+    await this.cache.set(key, result, PRODUCTS_LIST_TTL);
+    return result;
   }
 
   async findOne(id: string) {
@@ -65,23 +89,29 @@ export class ProductsService {
     const purity = KARAT_PURITY[dto.karat];
     const finalPrice = (ratePerGram * purity * dto.weight) + (dto.makingCharges * dto.weight);
 
-    return this.prisma.product.create({
+    const product = await this.prisma.product.create({
       data: { ...dto, karat: dto.karat as any, category: dto.category as any, finalPrice, basePricePerGram: ratePerGram },
     });
+    await this.cache.delByPattern(PRODUCTS_LIST_PATTERN);
+    return product;
   }
 
   async update(id: string, dto: Partial<CreateProductDto>, userId: string, userRole: string) {
     const product = await this.prisma.product.findUnique({ where: { id }, include: { shop: true } });
     if (!product) throw new NotFoundException('Product not found');
     if (userRole === 'SHOP_ADMIN' && product.shop.adminId !== userId) throw new ForbiddenException('Not your product');
-    return this.prisma.product.update({ where: { id }, data: dto as any });
+    const updated = await this.prisma.product.update({ where: { id }, data: dto as any });
+    await this.cache.delByPattern(PRODUCTS_LIST_PATTERN);
+    return updated;
   }
 
   async remove(id: string, userId: string, userRole: string) {
     const product = await this.prisma.product.findUnique({ where: { id }, include: { shop: true } });
     if (!product) throw new NotFoundException('Product not found');
     if (userRole === 'SHOP_ADMIN' && product.shop.adminId !== userId) throw new ForbiddenException('Not your product');
-    return this.prisma.product.update({ where: { id }, data: { isActive: false } });
+    const result = await this.prisma.product.update({ where: { id }, data: { isActive: false } });
+    await this.cache.delByPattern(PRODUCTS_LIST_PATTERN);
+    return result;
   }
 
   async recalculatePrices(shopId?: string) {
@@ -102,6 +132,7 @@ export class ProductsService {
     }
 
     await Promise.all(updates);
+    await this.cache.delByPattern(PRODUCTS_LIST_PATTERN);
     return { updated: updates.length };
   }
 }
