@@ -16,6 +16,7 @@ export class UploadController {
   constructor(private upload: UploadService) {}
 
   @Get('test-credentials')
+  @UseGuards()
   async testCredentials() {
     const config = {
       cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
