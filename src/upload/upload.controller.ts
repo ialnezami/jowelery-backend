@@ -15,20 +15,36 @@ export class UploadController {
 
   @Get('test-credentials')
   async testCredentials() {
-    const config = {
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-      api_key: process.env.CLOUDINARY_API_KEY,
-      api_secret_prefix: process.env.CLOUDINARY_API_SECRET?.slice(0, 4) + '***',
-    };
-    // Tiny 1x1 red PNG
-    const testImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==';
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    const config = { cloud_name: cloudName, api_key: apiKey, api_secret_prefix: apiSecret?.slice(0, 4) + '***' };
+
+    // Raw HTTP upload to see actual Cloudinary error body
+    const crypto = await import('crypto');
+    const FormData = await import('form-data');
+    const axios = (await import('axios')).default;
+
+    const timestamp = Math.floor(Date.now() / 1000);
+    const paramsToSign = `folder=jowelery-test&timestamp=${timestamp}`;
+    const signature = crypto.createHmac('sha256', apiSecret).update(paramsToSign).digest('hex');
+
+    const form = new FormData.default();
+    // Tiny 1x1 PNG buffer
+    const pngBuf = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+    form.append('file', pngBuf, { filename: 'test.png', contentType: 'image/png' });
+    form.append('api_key', apiKey);
+    form.append('timestamp', String(timestamp));
+    form.append('folder', 'jowelery-test');
+    form.append('signature', signature);
+
     try {
-      const ping = await cloudinary.api.ping();
-      const upload = await cloudinary.uploader.upload(testImage, { folder: 'jowelery-test' });
-      return { ok: true, config, ping, upload_url: upload.secure_url };
+      const res = await axios.post(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, form, { headers: form.getHeaders() });
+      return { ok: true, config, upload_url: res.data.secure_url };
     } catch (err) {
-      this.logger.error(`Cloudinary test failed: ${JSON.stringify(err)}`);
-      return { ok: false, config, error: { http_code: err.http_code, message: err.message, full: err } };
+      const rawError = err?.response?.data;
+      this.logger.error(`Raw Cloudinary error: ${JSON.stringify(rawError)}`);
+      return { ok: false, config, raw_error: rawError };
     }
   }
 
