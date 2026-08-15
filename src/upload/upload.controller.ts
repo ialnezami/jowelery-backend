@@ -1,5 +1,8 @@
 import { Controller, Get, Post, UseInterceptors, UploadedFile, UseGuards, Logger, InternalServerErrorException } from '@nestjs/common';
 import { v2 as cloudinary } from 'cloudinary';
+import { createHmac } from 'crypto';
+import axios from 'axios';
+import * as FormData from 'form-data';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
@@ -20,18 +23,12 @@ export class UploadController {
     const apiSecret = process.env.CLOUDINARY_API_SECRET;
     const config = { cloud_name: cloudName, api_key: apiKey, api_secret_prefix: apiSecret?.slice(0, 4) + '***' };
 
-    // Raw HTTP upload to see actual Cloudinary error body
-    const crypto = await import('crypto');
-    const FormData = await import('form-data');
-    const axios = (await import('axios')).default;
-
     const timestamp = Math.floor(Date.now() / 1000);
     const paramsToSign = `folder=jowelery-test&timestamp=${timestamp}`;
-    const signature = crypto.createHmac('sha256', apiSecret).update(paramsToSign).digest('hex');
+    const signature = createHmac('sha256', apiSecret).update(paramsToSign).digest('hex');
 
-    const form = new FormData.default();
-    // Tiny 1x1 PNG buffer
     const pngBuf = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+    const form = new FormData();
     form.append('file', pngBuf, { filename: 'test.png', contentType: 'image/png' });
     form.append('api_key', apiKey);
     form.append('timestamp', String(timestamp));
