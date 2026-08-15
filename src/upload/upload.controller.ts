@@ -1,4 +1,4 @@
-import { Controller, Post, UseInterceptors, UploadedFile, UseGuards } from '@nestjs/common';
+import { Controller, Post, UseInterceptors, UploadedFile, UseGuards, Logger, InternalServerErrorException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
@@ -10,14 +10,21 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class UploadController {
+  private readonly logger = new Logger(UploadController.name);
+
   constructor(private upload: UploadService) {}
 
   @Post('image')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
-    const url = await this.upload.uploadImage(file);
-    return { url };
+    try {
+      const url = await this.upload.uploadImage(file);
+      return { url };
+    } catch (err) {
+      this.logger.error('Cloudinary upload failed', err?.message, err?.http_code);
+      throw new InternalServerErrorException(err?.message || 'Upload failed');
+    }
   }
 
   @Post('video')
