@@ -8,15 +8,12 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('upload')
 @Controller('upload')
-@UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
 export class UploadController {
   private readonly logger = new Logger(UploadController.name);
 
   constructor(private upload: UploadService) {}
 
   @Get('test-credentials')
-  @UseGuards()
   async testCredentials() {
     const config = {
       cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -33,6 +30,8 @@ export class UploadController {
   }
 
   @Post('image')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
@@ -46,6 +45,8 @@ export class UploadController {
   }
 
   @Post('video')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file', {
     storage: memoryStorage(),
