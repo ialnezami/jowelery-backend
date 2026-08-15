@@ -1,4 +1,5 @@
-import { Controller, Post, UseInterceptors, UploadedFile, UseGuards, Logger, InternalServerErrorException } from '@nestjs/common';
+import { Controller, Get, Post, UseInterceptors, UploadedFile, UseGuards, Logger, InternalServerErrorException } from '@nestjs/common';
+import { v2 as cloudinary } from 'cloudinary';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
@@ -13,6 +14,22 @@ export class UploadController {
   private readonly logger = new Logger(UploadController.name);
 
   constructor(private upload: UploadService) {}
+
+  @Get('test-credentials')
+  async testCredentials() {
+    const config = {
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret_prefix: process.env.CLOUDINARY_API_SECRET?.slice(0, 4) + '***',
+    };
+    try {
+      const result = await cloudinary.api.ping();
+      return { ok: true, config, result };
+    } catch (err) {
+      this.logger.error(`Cloudinary ping failed: ${JSON.stringify(err)}`);
+      return { ok: false, config, error: err };
+    }
+  }
 
   @Post('image')
   @ApiConsumes('multipart/form-data')
