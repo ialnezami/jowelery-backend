@@ -25,7 +25,7 @@ export class UploadController {
 
     const timestamp = Math.floor(Date.now() / 1000);
     const paramsToSign = `folder=jowelery-test&timestamp=${timestamp}`;
-    const signature = createHmac('sha256', apiSecret).update(paramsToSign).digest('hex');
+    const signature = createHmac('sha1', apiSecret).update(paramsToSign).digest('hex');
 
     const pngBuf = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==', 'base64');
     const form = new FormData();
