@@ -22,8 +22,8 @@ export class UploadController {
       const url = await this.upload.uploadImage(file);
       return { url };
     } catch (err) {
-      this.logger.error('Cloudinary upload failed', err?.message, err?.http_code);
-      throw new InternalServerErrorException(err?.message || 'Upload failed');
+      this.logger.error(`Upload failed — http_code: ${err?.http_code}, message: ${err?.message}`);
+      throw new InternalServerErrorException(`Cloudinary ${err?.http_code ?? ''}: ${err?.message || 'Upload failed'}`);
     }
   }
 
